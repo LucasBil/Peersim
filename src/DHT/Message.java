@@ -3,6 +3,7 @@ package DHT;
 public class Message {
 
     public final static int HELLOWORLD = 0;
+    public final static int JOIN = 1;
 
     private int type;
     private String content;

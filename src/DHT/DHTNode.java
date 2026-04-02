@@ -7,6 +7,8 @@ import peersim.config.Configuration;
 import peersim.core.Network;
 import peersim.edsim.*;
 
+import java.util.ArrayList;
+
 public class DHTNode implements EDProtocol {
 
     //identifiant de la couche transport
@@ -23,6 +25,8 @@ public class DHTNode implements EDProtocol {
 
     //prefixe de la couche (nom de la variable de protocole du fichier de config)
     private String prefix;
+
+    private ArrayList<DHTNode> neighbours = new ArrayList<>();
 
     public DHTNode(String prefix) {
         this.prefix = prefix;
@@ -57,9 +61,22 @@ public class DHTNode implements EDProtocol {
         this.transport.send(getMyNode(), dest, msg, this.mypid);
     }
 
+    public ArrayList<DHTNode> getNeighbours() {
+        return this.neighbours;
+    }
+
+    public void setNeighbours(ArrayList<DHTNode> neighbours) {
+        this.neighbours = neighbours;
+    }
+
+    public void addNeighbours(DHTNode node){
+        this.neighbours.add(node);
+    }
+
     //affichage a la reception
     private void receive(Message msg) {
-        System.out.println(this + ": Received " + msg.getContent());
+        System.out.println(this + ": Received " + msg.getContent() + "TypeMessage :" + msg.getType());
+
         if (this.nodeId + 1 < Network.size()){
             peersim.core.Node dest = Network.get(this.nodeId + 1);
             send(msg, dest);
