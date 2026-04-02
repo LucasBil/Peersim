@@ -45,11 +45,13 @@ public class Initializer implements Control {
 	int maxNeighboursLeft = maxNeighbours/2;
 	int maxNeighboursRight = maxNeighbours - maxNeighboursLeft;
 	int networkSize = Network.size();
+	int spaceInterval = Configuration.getInt("simulation.maxIDlogique")/(networkSize);
 	//pour chaque noeud, on fait le lien entre la couche applicative et la couche transport
 	for (int i = 0; i < nodeNb; i++) {
 		dest = Network.get(i);
 		current = (DHTNode) dest.getProtocol(this.DHTPid);
 		current.setTransportLayer(i);
+		current.setNodeIdDHT(i*spaceInterval);
 	}
 
 

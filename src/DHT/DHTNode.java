@@ -23,6 +23,8 @@ public class DHTNode implements EDProtocol {
     //le numero de noeud
     private int nodeId;
 
+    private int nodeIdDHT;
+
     //prefixe de la couche (nom de la variable de protocole du fichier de config)
     private String prefix;
 
@@ -56,6 +58,13 @@ public class DHTNode implements EDProtocol {
         this.transport = (Transport) Network.get(this.nodeId).getProtocol(this.transportPid);
     }
 
+    public void setNodeIdDHT(int id){
+        this.nodeIdDHT = id;
+    }
+
+    public int getNodeIdDHT(){
+        return this.nodeIdDHT;
+    }
     //envoi d'un message (l'envoi se fait via la couche transport)
     public void send(Message msg, peersim.core.Node dest) {
         this.transport.send(getMyNode(), dest, msg, this.mypid);
@@ -93,8 +102,7 @@ public class DHTNode implements EDProtocol {
     }
 
     public String toString() {
-        return "Node "+ this.nodeId;
+        return "Node "+ this.nodeId + "(physic), " + this.nodeIdDHT + "(logic)";
     }
-
 
 }
