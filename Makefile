@@ -3,11 +3,11 @@ VER=1.0.4
 .PHONY: all clean doc release
 
 all:
-	javac -classpath "src;jep-2.3.0.jar;djep-1.0.0.jar" (Get-ChildItem -Path src -Filter *.java -Recurse | ForEach-Object { $_.FullName })
+	for /r src %%f in (*.java) do javac -classpath "src;peersim-$(VER).jar;jep-2.3.0.jar;djep-1.0.0.jar" "%%f"
 run:
 	java -classpath "src;jep-2.3.0.jar;djep-1.0.0.jar" peersim/Simulator config_file.cfg
 clean:
-	rm -f `find -name "*.class"`
+	for /r src %%f in (*.class) do del "%%f"
 doc:
 	rm -rf doc/*
 	javadoc -overview overview.html -classpath src:jep-2.3.0.jar:djep-1.0.0.jar -d doc \
