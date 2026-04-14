@@ -3,7 +3,8 @@ VER=1.0.4
 .PHONY: all clean doc release
 
 all:
-	javac -classpath "src;peersim-$(VER).jar;jep-2.3.0.jar;djep-1.0.0.jar" -sourcepath src -d src src/peersim/Simulator.java
+	dir /s /b src\*.java > sources.txt
+	javac -classpath "src;peersim-1.0.4.jar;jep-2.3.0.jar;djep-1.0.0.jar" -d src @sources.txt
 run:
 	java -classpath "src;jep-2.3.0.jar;djep-1.0.0.jar" peersim/Simulator config_file.cfg
 clean:
