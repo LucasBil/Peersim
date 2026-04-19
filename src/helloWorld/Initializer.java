@@ -1,56 +1,55 @@
 package helloWorld;
 
-import peersim.edsim.*;
 import peersim.core.*;
 import peersim.config.*;
+import peersim.edsim.EDSimulator;
 
-/*
-  Module d'initialisation de helloWorld: 
-  Fonctionnement:
-    pour chaque noeud, le module fait le lien entre la couche transport et la couche applicative
-    ensuite, il fait envoyer au noeud 0 un message "Hello" a tous les autres noeuds
- */
 public class Initializer implements peersim.core.Control {
-    
-    private int helloWorldPid;
 
-    public Initializer(String prefix) {
-	//recuperation du pid de la couche applicative
-	this.helloWorldPid = Configuration.getPid(prefix + ".helloWorldProtocolPid");
-    }
+	private static final int randomNode_SIZE = 10;
 
-    public boolean execute() {
-	int nodeNb;
-	HelloWorld emitter, current;
-	Node dest;
-	Message helloMsg;
+	private final int helloWorldPid;
 
-	//recuperation de la taille du reseau
-	nodeNb = Network.size();
-	//creation du message
-	helloMsg = new Message(Message.HELLOWORLD,"Hello!!");
-	if (nodeNb < 1) {
-	    System.err.println("Network size is not positive");
-	    System.exit(1);
+	public Initializer(String prefix) {
+		this.helloWorldPid = Configuration.getPid(prefix + ".helloWorldProtocolPid");
 	}
 
-	//recuperation de la couche applicative de l'emetteur (le noeud 0)
-	emitter = (HelloWorld)Network.get(0).getProtocol(this.helloWorldPid);
-	emitter.setTransportLayer(0);
-
-	//pour chaque noeud, on fait le lien entre la couche applicative et la couche transport
-	//puis on fait envoyer au noeud 0 un message "Hello"
-	for (int i = 0; i < nodeNb; i++) {
-	    dest = Network.get(i);
-	    current = (HelloWorld)dest.getProtocol(this.helloWorldPid);
-	    current.setTransportLayer(i);
-		if (i==1){
-			emitter.send(helloMsg, dest);
+	public boolean execute() {
+		int nodeNb = Network.size();
+		if (nodeNb < 1) {
+			System.err.println("Network size is not positive");
+			System.exit(1);
 		}
 
-	}
+		// Step 1: wire transport layers for ALL nodes first
+		for (int i = 0; i < nodeNb; i++) {
+			HelloWorld node = (HelloWorld) Network.get(i).getProtocol(helloWorldPid);
+			node.setTransportLayer(i);
+		}
 
-	System.out.println("Initialization completed");
-	return false;
-    }
+		// Step 2: manually build correct leafsets for the first randomNode_SIZE nodes.
+		int randomNodeCount = Math.min(randomNode_SIZE, nodeNb);
+		for (int i = 0; i < randomNodeCount; i++) {
+			HelloWorld node = (HelloWorld) Network.get(i).getProtocol(helloWorldPid);
+			for (int j = 0; j < randomNodeCount; j++) {
+				if (i == j) continue;
+				node.addNeighbor(Network.get(j));
+			}
+			node.trimLeafset();
+			System.out.println("randomNode Node(id=" + Network.get(i).getID() + ")"
+					+ " leafset = " + node.leafsetToString());
+		}
+
+		// Step 3: every remaining node schedules a SELF_JOIN into the ED queue
+		for (int i = randomNodeCount; i < nodeNb; i++) {
+			Node peerNode = Network.get(i);
+			Message selfJoin = new Message(Message.SELF_JOIN, peerNode);
+			EDSimulator.add(i - randomNodeCount + 1, selfJoin, peerNode, helloWorldPid);
+		}
+
+		System.out.println("Initialization completed — "
+				+ randomNodeCount + " nodes added manually, "
+				+ (nodeNb - randomNodeCount) + " SELF_JOIN events scheduled.");
+		return false;
+	}
 }
