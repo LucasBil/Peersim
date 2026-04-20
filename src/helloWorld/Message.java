@@ -1,6 +1,7 @@
 package helloWorld;
 
 import peersim.core.Node;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -18,9 +19,14 @@ public class Message {
     private Node        sender;
     private List<Node>  leafset;
 
-    // Tracks which nodes have already forwarded this JOIN, to prevent loops.
-    // Carried along as the message is routed hop by hop.
+    // For JOIN routing: tracks visited node IDs to prevent loops
     private Set<Long>   visited;
+
+    // For JOIN routing: accumulates every node the JOIN passes through.
+    // When the answering node builds the joiner's leafset, it includes
+    // all path nodes as candidates — they are guaranteed to be
+    // geographically close to the joiner on the ring.
+    private List<Node>  path;
 
     // HELLOWORLD
     public Message(int type, String content) {
@@ -33,6 +39,7 @@ public class Message {
         this.type    = type;
         this.sender  = sender;
         this.visited = new HashSet<>();
+        this.path    = new ArrayList<>();
     }
 
     // JOIN_REPLY / UPDATE_LEAFSET
@@ -47,4 +54,5 @@ public class Message {
     public Node       getSender()  { return sender;  }
     public List<Node> getLeafset() { return leafset; }
     public Set<Long>  getVisited() { return visited; }
+    public List<Node> getPath()    { return path;    }
 }

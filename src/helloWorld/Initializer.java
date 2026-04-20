@@ -6,7 +6,7 @@ import peersim.edsim.EDSimulator;
 
 public class Initializer implements peersim.core.Control {
 
-	private static final int randomNode_SIZE = 10;
+	private static final int BOOTSTRAP_SIZE = 10;
 
 	private final int helloWorldPid;
 
@@ -21,35 +21,46 @@ public class Initializer implements peersim.core.Control {
 			System.exit(1);
 		}
 
-		// Step 1: wire transport layers for ALL nodes first
+		// Step 1: wire transport layers for ALL nodes
 		for (int i = 0; i < nodeNb; i++) {
 			HelloWorld node = (HelloWorld) Network.get(i).getProtocol(helloWorldPid);
 			node.setTransportLayer(i);
 		}
 
-		// Step 2: manually build correct leafsets for the first randomNode_SIZE nodes.
-		int randomNodeCount = Math.min(randomNode_SIZE, nodeNb);
-		for (int i = 0; i < randomNodeCount; i++) {
-			HelloWorld node = (HelloWorld) Network.get(i).getProtocol(helloWorldPid);
-			for (int j = 0; j < randomNodeCount; j++) {
+		// Step 2: choose bootstrap nodes spread evenly across the network array
+		int bootstrapCount = Math.min(BOOTSTRAP_SIZE, nodeNb);
+		int[] bootstrapIndices = new int[bootstrapCount];
+		for (int i = 0; i < bootstrapCount; i++) {
+			bootstrapIndices[i] = (int) Math.round((double) i * (nodeNb - 1) / (bootstrapCount - 1));
+		}
+
+		// Build each bootstrap node's leafset from the other bootstrap nodes
+		for (int i = 0; i < bootstrapCount; i++) {
+			HelloWorld node = (HelloWorld) Network.get(bootstrapIndices[i]).getProtocol(helloWorldPid);
+			for (int j = 0; j < bootstrapCount; j++) {
 				if (i == j) continue;
-				node.addNeighbor(Network.get(j));
+				node.addNeighbor(Network.get(bootstrapIndices[j]));
 			}
 			node.trimLeafset();
-			System.out.println("randomNode Node(id=" + Network.get(i).getID() + ")"
+			System.out.println("Bootstrap Node(id=" + Network.get(bootstrapIndices[i]).getID() + ")"
 					+ " leafset = " + node.leafsetToString());
 		}
 
-		// Step 3: every remaining node schedules a SELF_JOIN into the ED queue
-		for (int i = randomNodeCount; i < nodeNb; i++) {
+		// Step 3: schedule SELF_JOIN for all non-bootstrap nodes, staggered by 1 time unit
+		int scheduled = 0;
+		for (int i = 0; i < nodeNb; i++) {
+			boolean isBootstrap = false;
+			for (int bi : bootstrapIndices) { if (bi == i) { isBootstrap = true; break; } }
+			if (isBootstrap) continue;
+
 			Node peerNode = Network.get(i);
 			Message selfJoin = new Message(Message.SELF_JOIN, peerNode);
-			EDSimulator.add(i - randomNodeCount + 1, selfJoin, peerNode, helloWorldPid);
+			EDSimulator.add(++scheduled, selfJoin, peerNode, helloWorldPid);
 		}
 
 		System.out.println("Initialization completed — "
-				+ randomNodeCount + " nodes added manually, "
-				+ (nodeNb - randomNodeCount) + " SELF_JOIN events scheduled.");
+				+ bootstrapCount + " nodes bootstrapped manually, "
+				+ scheduled + " SELF_JOIN events scheduled.");
 		return false;
 	}
 }
