@@ -49,8 +49,7 @@ public class Initializer implements peersim.core.Control {
 				node.addNeighbor(Network.get(bootstrapIndices[j]));
 			}
 			node.trimLeafset();
-			System.out.println("Bootstrap Node(id=" + Network.get(bootstrapIndices[i]).getID() + ")"
-					+ " leafset = " + node.leafsetToString());
+			//System.out.println("Bootstrap Node(id=" + Network.get(bootstrapIndices[i]).getID() + ") + " leafset = " + node.leafsetToString());
 		}
 
 		// Step 3: schedule SELF_JOIN for all non-bootstrap nodes, staggered by 1 time unit
@@ -65,9 +64,7 @@ public class Initializer implements peersim.core.Control {
 			EDSimulator.add(++scheduled, selfJoin, peerNode, DHTPid);
 		}
 
-		System.out.println("Initialization completed — "
-				+ bootstrapCount + " nodes bootstrapped manually, "
-				+ scheduled + " SELF_JOIN events scheduled.");
+		//System.out.println("Initialization completed — " + bootstrapCount + " nodes bootstrapped manually, " + scheduled + " SELF_JOIN events scheduled.");
 		return false;
 	}
 }

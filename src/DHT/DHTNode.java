@@ -68,7 +68,7 @@ public class DHTNode implements EDProtocol {
     public void join() {
         int networkSize = Network.size();
         if (networkSize <= 1) {
-            System.out.println(this + ": alone in the network, can't join.");
+            //System.out.println(this + ": alone in the network, can't join.");
             return;
         }
 
@@ -78,7 +78,7 @@ public class DHTNode implements EDProtocol {
         } while (randomNodeIdx == this.nodeIdx);
 
         Node randomNode = Network.get(randomNodeIdx);
-        System.out.println(this + ": sending JOIN to " + nodeLabel(randomNode));
+        //System.out.println(this + ": sending JOIN to " + nodeLabel(randomNode));
         send(new Message(Message.JOIN, getMyNode()), randomNode);
     }
 
@@ -99,7 +99,7 @@ public class DHTNode implements EDProtocol {
             case Message.JOIN_REPLY:     handleJoinReply(msg);   break;
             case Message.UPDATE_LEAFSET: handleUpdate(msg);      break;
             default:
-                System.out.println(this + ": unknown message type " + msg.getType());
+                //System.out.println(this + ": unknown message type " + msg.getType());
         }
     }
 
@@ -131,7 +131,7 @@ public class DHTNode implements EDProtocol {
         }
 
         if (bestNode.getID() == this.myLogicalId) {
-            System.out.println(this + ": answering JOIN from " + nodeLabel(joiner));
+           // System.out.println(this + ": answering JOIN from " + nodeLabel(joiner));
 
             // Track hop count for Benchmark
             Benchmark.joinHopCounts.put(joinerLogId, msg.getPath().size());
@@ -143,8 +143,7 @@ public class DHTNode implements EDProtocol {
             List<Node> joinerLeafset = buildLeafsetFor(joinerLogId, richCandidates);
             send(new Message(Message.JOIN_REPLY, getMyNode(), joinerLeafset), joiner);
         } else {
-            System.out.println(this + ": forwarding JOIN from " + nodeLabel(joiner)
-                    + " to " + nodeLabel(bestNode));
+            //System.out.println(this + ": forwarding JOIN from " + nodeLabel(joiner) + " to " + nodeLabel(bestNode));
             send(msg, bestNode);
         }
     }
@@ -154,7 +153,7 @@ public class DHTNode implements EDProtocol {
     private void handleJoinReply(Message msg) {
         this.leafset = new ArrayList<>(msg.getLeafset());
         sortLeafset();
-        System.out.println(this + ": JOIN_REPLY received, leafset = " + leafsetToString());
+        //System.out.println(this + ": JOIN_REPLY received, leafset = " + leafsetToString());
 
         Message updateMsg = new Message(Message.UPDATE_LEAFSET, getMyNode(), null);
         for (Node neighbor : leafset) {
@@ -173,15 +172,14 @@ public class DHTNode implements EDProtocol {
         if (shouldBeInLeafset(newLogId)) {
             addToLeafset(newNode);
             trimLeafset();
-            System.out.println(this + ": leafset updated after "
-                    + nodeLabel(newNode) + " joined the leafset => " + leafsetToString());
+            //System.out.println(this + ": leafset updated after " + nodeLabel(newNode) + " joined the leafset => " + leafsetToString());
         }
     }
 
     // ------------------------------------------------ MESSAGE
 
     private void handleDHTNode(Message msg) {
-        System.out.println(this + ": Received " + msg.getContent());
+       // System.out.println(this + ": Received " + msg.getContent());
         Node successor = getRingSuccessor();
         if (successor != null) {
             send(msg, successor);
@@ -219,7 +217,7 @@ public class DHTNode implements EDProtocol {
         furthestNodes.sort(Comparator.comparingLong(
                 (Node n) -> minRingDistance(myLogicalId, n.getID())).reversed());
 
-        System.out.println(this + ": long links updated => " + furthestNodesToString());
+        //System.out.println(this + ": long links updated => " + furthestNodesToString());
     }
 
     // -------------------------------------------------- leafset mechanics

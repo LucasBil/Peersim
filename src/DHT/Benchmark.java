@@ -14,15 +14,13 @@ public class Benchmark implements peersim.core.Control {
 
     // ------------------------------------------------------------------ sweep tables
 
-    private static final int[] LEAFSET_SIZES   = {2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 30};
-    private static final int[] MAX_NEIGHBOURS  = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-    private static final int[] MAX_IDS         = {100, 250, 500, 1000, 2000, 3000, 5000};
+    private static final int[] LEAFSET_SIZES   = {2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20, 24, 30, 40, 50, 64, 128, 256};
+    private static final int[] MAX_NEIGHBOURS  = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 16, 20, 24, 32, 48, 64, 128, 256};
+    private static final int[] MAX_IDS         = {100, 250, 500, 1000, 2000, 3000, 5000, 7500, 10000, 15000, 20000, 50000, 100000, 250000};
 
-    private static final int TRIALS_PER_CONFIG = 5;
+    private static final int TRIALS_PER_CONFIG = 10;
 
-    // Total experiments: (11 + 10 + 7) * 5 = 140
-    public static final int TOTAL_EXPERIMENTS =
-            (LEAFSET_SIZES.length + MAX_NEIGHBOURS.length + MAX_IDS.length) * TRIALS_PER_CONFIG;
+    public static final int TOTAL_EXPERIMENTS = (LEAFSET_SIZES.length + MAX_NEIGHBOURS.length + MAX_IDS.length) * TRIALS_PER_CONFIG;
 
     private static int currentExpIndex = 0;
 

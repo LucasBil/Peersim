@@ -10,7 +10,7 @@ public class Transport implements Protocol {
     private final long range;
 
     public Transport(String prefix) {
-        System.out.println("Transport Layer Enabled");
+        //System.out.println("Transport Layer Enabled");
         min = Configuration.getInt(prefix + ".mindelay");
         long max = Configuration.getInt(prefix + ".maxdelay");
         if (max < min) {
