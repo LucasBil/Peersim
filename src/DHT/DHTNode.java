@@ -14,26 +14,30 @@ public class DHTNode implements EDProtocol {
     private final int    transportPid;
     private final int    mypid;
     private final String prefix;
-    private final long   maxLogicalId;
-    private final int    leafsetSize;
-    private final int    maxFurthestNodes;
+
+    // These are read fresh each time setTransportLayer() is called so that
+    // Benchmark.applyExperimentParameters() overrides take effect.
+    private long maxLogicalId;
+    private int  leafsetSize;
+    private int  maxFurthestNodes;
 
     // ------------------------------------------------------------------ state
-    private Transport transport;
-    private long        myLogicalId;
-    private int         nodeIdx;
-    private List<Node>  leafset;
-    private List<Node>  furthestNodes;
+    private Transport  transport;
+    private long       myLogicalId;
+    private int        nodeIdx;
+    private List<Node> leafset;
+    private List<Node> furthestNodes;
 
     // ---------------------------------------------------------------- lifecycle
 
     public DHTNode(String prefix) {
-        this.prefix           = prefix;
-        this.transportPid     = Configuration.getPid(prefix + ".transport");
-        this.mypid            = Configuration.getPid(prefix + ".myself");
-        this.maxLogicalId     = Configuration.getLong("simulation.maxIDlogique", 1000);
-        this.leafsetSize      = Configuration.getInt("simulation.leafsetSize", 4);
-        this.maxFurthestNodes = Configuration.getInt("simulation.maxNeighbours", 4);
+        this.prefix       = prefix;
+        this.transportPid = Configuration.getPid(prefix + ".transport");
+        this.mypid        = Configuration.getPid(prefix + ".myself");
+        // Read defaults at construction time; will be refreshed in setTransportLayer()
+        this.maxLogicalId     = readLong("simulation.maxIDlogique",  1000);
+        this.leafsetSize      = readInt ("simulation.leafsetSize",   4);
+        this.maxFurthestNodes = readInt ("simulation.maxNeighbours", 4);
         this.leafset          = new ArrayList<>();
         this.furthestNodes    = new ArrayList<>();
     }
@@ -43,10 +47,20 @@ public class DHTNode implements EDProtocol {
 
     // -------------------------------------------------------- PeerSim wiring
 
+    /**
+     * Re-reads all experiment-specific parameters here so that overrides
+     * injected by Benchmark.applyExperimentParameters() are picked up even
+     * for nodes that were cloned before the override was set.
+     */
     public void setTransportLayer(int networkIdx) {
-        this.nodeIdx     = networkIdx;
-        this.myLogicalId = Network.get(networkIdx).getID();
-        this.transport   = (Transport) Network.get(networkIdx).getProtocol(transportPid);
+        this.maxLogicalId     = readLong("simulation.maxIDlogique",  1000);
+        this.leafsetSize      = readInt ("simulation.leafsetSize",   4);
+        this.maxFurthestNodes = readInt ("simulation.maxNeighbours", 4);
+        this.nodeIdx          = networkIdx;
+        this.myLogicalId      = Network.get(networkIdx).getID();
+        this.transport        = (Transport) Network.get(networkIdx).getProtocol(transportPid);
+        this.leafset          = new ArrayList<>();
+        this.furthestNodes    = new ArrayList<>();
     }
 
     // ---------------------------------------------------------- join procedure
@@ -80,7 +94,7 @@ public class DHTNode implements EDProtocol {
 
         switch (msg.getType()) {
             case Message.SELF_JOIN:      join();                 break;
-            case Message.MESSAGE:     handleDHTNode(msg);        break;
+            case Message.MESSAGE:        handleDHTNode(msg);     break;
             case Message.JOIN:           handleJoin(msg);        break;
             case Message.JOIN_REPLY:     handleJoinReply(msg);   break;
             case Message.UPDATE_LEAFSET: handleUpdate(msg);      break;
@@ -98,7 +112,6 @@ public class DHTNode implements EDProtocol {
         msg.getVisited().add(this.myLogicalId);
         msg.getPath().add(getMyNode());
 
-        // Candidates: ourselves + leafset + long links, excluding the joiner
         List<Node> candidates = new ArrayList<>();
         candidates.add(getMyNode());
         for (Node n : leafset)       { if (n.getID() != joinerLogId) candidates.add(n); }
@@ -119,7 +132,10 @@ public class DHTNode implements EDProtocol {
 
         if (bestNode.getID() == this.myLogicalId) {
             System.out.println(this + ": answering JOIN from " + nodeLabel(joiner));
-            // Merge our candidates with the routing path for a richer pool
+
+            // Track hop count for Benchmark
+            Benchmark.joinHopCounts.put(joinerLogId, msg.getPath().size());
+
             List<Node> richCandidates = new ArrayList<>(candidates);
             for (Node p : msg.getPath()) {
                 if (p.getID() != joinerLogId) richCandidates.add(p);
@@ -133,7 +149,7 @@ public class DHTNode implements EDProtocol {
         }
     }
 
-    // --------------------------------------- JOIN_REPLY handler (joiner side)
+    // --------------------------------------- JOIN_REPLY handler
 
     private void handleJoinReply(Message msg) {
         this.leafset = new ArrayList<>(msg.getLeafset());
@@ -208,13 +224,9 @@ public class DHTNode implements EDProtocol {
 
     // -------------------------------------------------- leafset mechanics
 
-    /**
-     * Builds the best possible leafset for targetId from the candidate pool.
-     */
     private List<Node> buildLeafsetFor(long targetId, List<Node> candidates) {
         int half = leafsetSize / 2;
 
-        // Step 1: deduplicate
         List<Node> deduped = new ArrayList<>();
         for (Node n : candidates) {
             long nId = n.getID();
@@ -224,13 +236,11 @@ public class DHTNode implements EDProtocol {
             if (!seen) deduped.add(n);
         }
 
-        // Step 2: sort by proximity to targetId (closest first)
         deduped.sort(Comparator.comparingLong(n -> minRingDistance(n.getID(), targetId)));
 
-        // Step 3: fill predecessors and successors greedily (closest first)
         List<Node> predecessors = new ArrayList<>();
         List<Node> successors   = new ArrayList<>();
-        List<Node> overflow     = new ArrayList<>(); // candidates that don't fit on their side
+        List<Node> overflow     = new ArrayList<>();
 
         for (Node n : deduped) {
             long cw = ringDistance(targetId, n.getID());
@@ -244,15 +254,10 @@ public class DHTNode implements EDProtocol {
             }
         }
 
-        // Step 4: fill any remaining slots from overflow (closest overall wins)
         for (Node n : overflow) {
-            if (predecessors.size() < half) {
-                predecessors.add(n);
-            } else if (successors.size() < half) {
-                successors.add(n);
-            } else {
-                break;
-            }
+            if (predecessors.size() < half)      predecessors.add(n);
+            else if (successors.size() < half)   successors.add(n);
+            else                                 break;
         }
 
         List<Node> result = new ArrayList<>();
@@ -346,6 +351,19 @@ public class DHTNode implements EDProtocol {
             if (d > 0 && d < bestDist) { bestDist = d; best = n; }
         }
         return best;
+    }
+
+    // Read from System property first (Benchmark override), then config file
+    private static long readLong(String key, long def) {
+        String v = System.getProperty(key);
+        if (v != null) return Long.parseLong(v);
+        return Configuration.getLong(key, def);
+    }
+
+    private static int readInt(String key, int def) {
+        String v = System.getProperty(key);
+        if (v != null) return Integer.parseInt(v);
+        return Configuration.getInt(key, def);
     }
 
     public void send(Message msg, Node dest) {

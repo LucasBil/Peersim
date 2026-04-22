@@ -8,6 +8,9 @@ public class Initializer implements peersim.core.Control {
 
 	private static final int BOOTSTRAP_SIZE = 10;
 
+	// --- ADDED: Static counter to track experiments manually ---
+	private static int experimentCounter = 0;
+
 	private final int DHTPid;
 
 	public Initializer(String prefix) {
@@ -15,6 +18,10 @@ public class Initializer implements peersim.core.Control {
 	}
 
 	public boolean execute() {
+		// --- FIXED: Use and increment our manual counter ---
+		int experiment = experimentCounter++;
+		Benchmark.applyExperimentParameters(experiment);
+
 		int nodeNb = Network.size();
 		if (nodeNb < 1) {
 			System.err.println("Network size is not positive");
