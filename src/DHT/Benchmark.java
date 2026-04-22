@@ -14,23 +14,26 @@ public class Benchmark implements peersim.core.Control {
 
     // ------------------------------------------------------------------ sweep tables
 
-    private static final int[] LEAFSET_SIZES   = {2, 4, 6, 8};
-    private static final int[] MAX_NEIGHBOURS  = {2, 4, 6, 8};
-    private static final int[] MAX_IDS         = {100, 500, 1000, 2000};
+    private static final int[] LEAFSET_SIZES   = {2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 30};
+    private static final int[] MAX_NEIGHBOURS  = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    private static final int[] MAX_IDS         = {100, 250, 500, 1000, 2000, 3000, 5000};
 
+    private static final int TRIALS_PER_CONFIG = 5;
+
+    // Total experiments: (11 + 10 + 7) * 5 = 140
     public static final int TOTAL_EXPERIMENTS =
-            LEAFSET_SIZES.length + MAX_NEIGHBOURS.length + MAX_IDS.length;
+            (LEAFSET_SIZES.length + MAX_NEIGHBOURS.length + MAX_IDS.length) * TRIALS_PER_CONFIG;
 
-    // --- NEW: Static variable to track the current experiment index ---
     private static int currentExpIndex = 0;
+
+    // ------------------------------------------------------------------ averaging storage
+
+    private static final List<ExperimentResult> results = new ArrayList<>();
+    private static Metrics accumulator = new Metrics(); // Sums values across trials
 
     // ------------------------------------------------------------------ hop tracking
 
     public static final Map<Long, Integer> joinHopCounts = new HashMap<>();
-
-    // ------------------------------------------------------------------ results storage
-
-    private static final List<ExperimentResult> results = new ArrayList<>();
 
     // ------------------------------------------------------------------ lifecycle
 
@@ -42,26 +45,23 @@ public class Benchmark implements peersim.core.Control {
 
     // ------------------------------------------------------------------ parameter injection
 
-    /**
-     * Called by Initializer at the very start of each experiment.
-     */
     public static void applyExperimentParameters(int experiment) {
-        // Save the index so execute() can access it later
         currentExpIndex = experiment;
+        int configIndex = experiment / TRIALS_PER_CONFIG;
 
         int leafsetSize, maxNeighbours, maxIDlogique;
 
-        if (experiment < LEAFSET_SIZES.length) {
-            leafsetSize  = LEAFSET_SIZES[experiment];
+        if (configIndex < LEAFSET_SIZES.length) {
+            leafsetSize   = LEAFSET_SIZES[configIndex];
             maxNeighbours = 4;
             maxIDlogique  = 1000;
-        } else if (experiment < LEAFSET_SIZES.length + MAX_NEIGHBOURS.length) {
-            int i = experiment - LEAFSET_SIZES.length;
+        } else if (configIndex < LEAFSET_SIZES.length + MAX_NEIGHBOURS.length) {
+            int i = configIndex - LEAFSET_SIZES.length;
             leafsetSize   = 4;
             maxNeighbours = MAX_NEIGHBOURS[i];
             maxIDlogique  = 1000;
         } else {
-            int i = experiment - LEAFSET_SIZES.length - MAX_NEIGHBOURS.length;
+            int i = configIndex - LEAFSET_SIZES.length - MAX_NEIGHBOURS.length;
             leafsetSize   = 4;
             maxNeighbours = 4;
             maxIDlogique  = MAX_IDS[i];
@@ -71,32 +71,50 @@ public class Benchmark implements peersim.core.Control {
         System.setProperty("simulation.maxNeighbours", String.valueOf(maxNeighbours));
         System.setProperty("simulation.maxIDlogique",  String.valueOf(maxIDlogique));
 
-        System.out.println("\n>>> Starting Experiment " + experiment
-                + " [ls=" + leafsetSize + ", mn=" + maxNeighbours + ", mid=" + maxIDlogique + "]");
+        System.out.println(">>> Run " + experiment + " (Config " + configIndex + ") | Trial " + (experiment % TRIALS_PER_CONFIG + 1));
     }
 
     // ------------------------------------------------------------------ control execution
 
     @Override
     public boolean execute() {
-        // Use the static index instead of CommonState
-        int exp    = currentExpIndex;
-        int nodeNb = Network.size();
+        int exp         = currentExpIndex;
+        int configIndex = exp / TRIALS_PER_CONFIG;
+        int nodeNb      = Network.size();
 
-        long leafsetSize   = Long.parseLong(System.getProperty("simulation.leafsetSize", "4"));
-        long maxNeighbours = Long.parseLong(System.getProperty("simulation.maxNeighbours", "4"));
-        long maxIDlogique  = Long.parseLong(System.getProperty("simulation.maxIDlogique", "1000"));
+        // Retrieve current parameters for metrics calculation
+        int leafsetSize   = Integer.parseInt(System.getProperty("simulation.leafsetSize", "4"));
+        int maxNeighbours = Integer.parseInt(System.getProperty("simulation.maxNeighbours", "4"));
+        long maxIDlogique = Long.parseLong(System.getProperty("simulation.maxIDlogique", "1000"));
 
-        Metrics m = computeMetrics(nodeNb, (int) leafsetSize, maxIDlogique, (int) maxNeighbours);
+        // 1. Compute metrics for this specific run
+        Metrics currentRun = computeMetrics(nodeNb, leafsetSize, maxIDlogique, maxNeighbours);
 
-        String sweepName  = getSweepName(exp);
-        String paramLabel = getParamLabel(exp, (int) leafsetSize, (int) maxNeighbours, (int) maxIDlogique);
+        // 2. Accumulate values for averaging
+        accumulator.completenessPercent += currentRun.completenessPercent;
+        accumulator.correctnessPercent  += currentRun.correctnessPercent;
+        accumulator.longLinkCoverage    += currentRun.longLinkCoverage;
+        accumulator.avgHops             += currentRun.avgHops;
 
-        results.add(new ExperimentResult(sweepName, paramLabel, m));
+        // 3. If this is the LAST trial of the current configuration, finalize the average
+        if ((exp + 1) % TRIALS_PER_CONFIG == 0) {
+            accumulator.completenessPercent /= TRIALS_PER_CONFIG;
+            accumulator.correctnessPercent  /= TRIALS_PER_CONFIG;
+            accumulator.longLinkCoverage    /= TRIALS_PER_CONFIG;
+            accumulator.avgHops             /= TRIALS_PER_CONFIG;
+
+            String sweepName  = getSweepName(configIndex);
+            String paramLabel = getParamLabel(configIndex, leafsetSize, maxNeighbours, (int)maxIDlogique);
+
+            results.add(new ExperimentResult(sweepName, paramLabel, accumulator));
+
+            // Reset for next config
+            accumulator = new Metrics();
+        }
 
         joinHopCounts.clear();
 
-        // Print full table on the last experiment
+        // Print full table on the last experiment run
         if (exp == TOTAL_EXPERIMENTS - 1) {
             printResultsTable();
         }
@@ -107,8 +125,7 @@ public class Benchmark implements peersim.core.Control {
     // ------------------------------------------------------------------ metrics logic
 
     private Metrics computeMetrics(int nodeNb, int leafsetSize, long maxIDlogique, int maxNeighbours) {
-        Metrics m        = new Metrics();
-        m.totalNodes     = nodeNb;
+        Metrics m = new Metrics();
 
         long[] sortedIds = new long[nodeNb];
         DHTNode[] nodes  = new DHTNode[nodeNb];
@@ -118,29 +135,27 @@ public class Benchmark implements peersim.core.Control {
         }
         Arrays.sort(sortedIds);
 
-        int totalSlots    = 0;
-        int correctSlots  = 0;
-        int full          = 0;
-        int half          = leafsetSize / 2;
-        int fullLongLinks = 0;
+        int totalSlots = 0, correctSlots = 0, fullLS = 0, fullLL = 0;
+        int half = leafsetSize / 2;
 
         for (DHTNode node : nodes) {
             List<Node> ls = node.getLeafset();
-            if (ls.size() >= leafsetSize) full++;
-            if (node.getFurthestNodes().size() >= maxNeighbours) fullLongLinks++;
+            if (ls.size() >= leafsetSize) fullLS++;
+            if (node.getFurthestNodes().size() >= maxNeighbours) fullLL++;
 
             Set<Long> trueNeighbors = getTrueNeighbors(node.getLogicalId(), sortedIds, half);
             totalSlots += ls.size();
             for (Node n : ls) {
-                if (trueNeighbors.contains(((DHTNode)n.getProtocol(DHTPid)).getLogicalId())) {
+                long neighborLogicalId = ((DHTNode)n.getProtocol(DHTPid)).getLogicalId();
+                if (trueNeighbors.contains(neighborLogicalId)) {
                     correctSlots++;
                 }
             }
         }
 
-        m.completenessPercent = 100.0 * full / nodeNb;
+        m.completenessPercent = 100.0 * fullLS / nodeNb;
         m.correctnessPercent  = totalSlots > 0 ? 100.0 * correctSlots / totalSlots : 0;
-        m.longLinkCoverage    = 100.0 * fullLongLinks / nodeNb;
+        m.longLinkCoverage    = 100.0 * fullLL / nodeNb;
 
         if (!joinHopCounts.isEmpty()) {
             double total = 0;
@@ -168,7 +183,7 @@ public class Benchmark implements peersim.core.Control {
 
     private void printResultsTable() {
         System.out.println("\n+------------------------------------------------------------------------------+");
-        System.out.println("|                         BENCHMARK RESULTS SUMMARY                          |");
+        System.out.println("|                    BENCHMARK SUMMARY (AVERAGED OVER " + TRIALS_PER_CONFIG + " TRIALS)                 |");
         System.out.println("+------------------------------------------------------------------------------+");
 
         String[] sweeps = {"leafsetSize", "maxNeighbours", "maxIDlogique"};
@@ -190,21 +205,20 @@ public class Benchmark implements peersim.core.Control {
         System.out.println("+------------------------------------------------------------------------------+\n");
     }
 
-    private String getSweepName(int exp) {
-        if (exp < LEAFSET_SIZES.length) return "leafsetSize";
-        if (exp < LEAFSET_SIZES.length + MAX_NEIGHBOURS.length) return "maxNeighbours";
+    private String getSweepName(int configIndex) {
+        if (configIndex < LEAFSET_SIZES.length) return "leafsetSize";
+        if (configIndex < LEAFSET_SIZES.length + MAX_NEIGHBOURS.length) return "maxNeighbours";
         return "maxIDlogique";
     }
 
-    private String getParamLabel(int exp, int ls, int mn, int mid) {
-        if (exp < LEAFSET_SIZES.length) return "ls=" + ls;
-        if (exp < LEAFSET_SIZES.length + MAX_NEIGHBOURS.length) return "mn=" + mn;
+    private String getParamLabel(int configIndex, int ls, int mn, int mid) {
+        if (configIndex < LEAFSET_SIZES.length) return "ls=" + ls;
+        if (configIndex < LEAFSET_SIZES.length + MAX_NEIGHBOURS.length) return "mn=" + mn;
         return "mid=" + mid;
     }
 
     static class Metrics {
-        int totalNodes;
-        double completenessPercent, correctnessPercent, longLinkCoverage, avgHops;
+        double completenessPercent = 0, correctnessPercent = 0, longLinkCoverage = 0, avgHops = 0;
     }
 
     static class ExperimentResult {
