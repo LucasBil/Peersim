@@ -195,11 +195,11 @@ public class DHTNode implements EDProtocol {
         for (Node n : leafset)       { if (n.getID() == candId) return; }
         for (Node n : furthestNodes) { if (n.getID() == candId) return; }
 
-        long candDist = minRingDistance(myLogicalId, candId);
 
         if (furthestNodes.size() < maxFurthestNodes) {
             furthestNodes.add(candidate);
         } else {
+            long candDist = minRingDistance(myLogicalId, candId);
             Node closestFar     = null;
             long closestFarDist = Long.MAX_VALUE;
             for (Node n : furthestNodes) {
