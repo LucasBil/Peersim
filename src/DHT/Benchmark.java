@@ -15,7 +15,7 @@ public class Benchmark implements peersim.core.Control {
 
     private static final int[] LEAFSET_SIZES   = {2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20, 24, 30, 40, 50, 64, 128, 256};
     private static final int[] MAX_NEIGHBOURS  = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 16, 20, 24, 32, 48, 64, 128, 256};
-    private static final int[] MAX_IDS         = {100, 250, 500, 1000, 2000, 3000, 5000, 7500, 10000, 15000, 20000, 50000, 100000, 250000};
+    private static final int[] MAX_IDS         = {2000, 2500, 3000, 3500, 4000, 4500, 5000, 7500, 10000, 15000, 20000, 50000, 100000, 250000};
     private static final int[] BOOTSTRAP_SIZES = {1, 2, 3, 5, 10, 15, 20, 30, 50, 75, 100, 150, 200, 300, 500};
 
     // Total number of trials per config (takes average of each N trials for statistical stability)

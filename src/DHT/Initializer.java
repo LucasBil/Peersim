@@ -24,13 +24,31 @@ public class Initializer implements peersim.core.Control {
 			System.exit(1);
 		}
 
-		// Dynamically read the bootstrap size injected by the Benchmark sweep
+		// Dynamically read the properties injected by the Benchmark sweep
 		int bootstrapSizeConfig = Integer.parseInt(System.getProperty("simulation.bootstrapSize", "30"));
+		long maxIDlogique = Long.parseLong(System.getProperty("simulation.maxIDlogique", "1000"));
 
-		// Step 1: wire transport layers for ALL nodes
+		if (nodeNb > maxIDlogique) {
+			System.err.println("CRITICAL ERROR: Network size (" + nodeNb + ") is larger than maxIDlogique (" + maxIDlogique + "). Not enough unique IDs available!");
+			System.exit(1);
+		}
+
+		// -------------------------------------------------------------------------
+		// Step 1: Wire transport layers and assign UNIQUE RANDOM Logical IDs
+		// -------------------------------------------------------------------------
+		java.util.Set<Long> assignedIds = new java.util.HashSet<>();
+
 		for (int i = 0; i < nodeNb; i++) {
 			DHTNode node = (DHTNode) Network.get(i).getProtocol(DHTPid);
 			node.setTransportLayer(i);
+
+			// Generate a unique random ID strictly between 0 and (maxIDlogique - 1)
+			long randomId;
+			do {
+				randomId = Math.abs(CommonState.r.nextLong()) % maxIDlogique;
+			} while (!assignedIds.add(randomId)); // Loops if the ID is already taken
+
+			node.setLogicalId(randomId);
 		}
 
 		// Step 2: choose bootstrap nodes spread evenly across the network array
@@ -48,14 +66,18 @@ public class Initializer implements peersim.core.Control {
 				node.addNeighbor(Network.get(bootstrapIndices[j]));
 			}
 			node.trimLeafset();
-			//System.out.println("Bootstrap Node(id=" + Network.get(bootstrapIndices[i]).getID() + ") + " leafset = " + node.leafsetToString());
 		}
 
 		// Step 3: schedule SELF_JOIN for all non-bootstrap nodes, staggered by 1 time unit
 		int scheduledTime = 0;
 		for (int i = 0; i < nodeNb; i++) {
 			boolean isBootstrap = false;
-			for (int bi : bootstrapIndices) { if (bi == i) { isBootstrap = true; break; } }
+			for (int bi : bootstrapIndices) {
+				if (bi == i) {
+					isBootstrap = true;
+					break;
+				}
+			}
 			if (isBootstrap) continue;
 
 			Node peerNode = Network.get(i);
@@ -63,23 +85,15 @@ public class Initializer implements peersim.core.Control {
 			EDSimulator.add(++scheduledTime, selfJoin, peerNode, DHTPid);
 		}
 
-		// -------------------------------------------------------------------------
-		// Step 4: STABILIZATION WAVES (New Events)
-		// -------------------------------------------------------------------------
-		// Schedule a second wave of SELF_JOINs for ALL nodes (including bootstraps).
-		// We add a massive delay (e.g., nodeNb * 2) to ensure these stabilization
-		// events only fire AFTER the chaotic initial join phase has completely settled.
-
+		// Step 4: STABILIZATION WAVES
 		int stabilizationDelay = scheduledTime + (nodeNb * 2);
 
 		for (int i = 0; i < nodeNb; i++) {
 			Node peerNode = Network.get(i);
 			Message stabilizeJoin = new Message(Message.SELF_JOIN, peerNode);
-			// Stagger the stabilization events so they don't all fire on the exact same tick
 			EDSimulator.add(stabilizationDelay + i, stabilizeJoin, peerNode, DHTPid);
 		}
 
-		//System.out.println("Initialization completed — " + bootstrapCount + " nodes bootstrapped manually, " + scheduledTime + " initial joins, " + nodeNb + " stabilization events scheduled.");
 		return false;
 	}
 }
