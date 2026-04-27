@@ -6,9 +6,8 @@ import peersim.edsim.EDSimulator;
 
 public class Initializer implements peersim.core.Control {
 
-	private static final int BOOTSTRAP_SIZE = 10;
+	private static final int BOOTSTRAP_SIZE = 30;
 
-	// --- ADDED: Static counter to track experiments manually ---
 	private static int experimentCounter = 0;
 
 	private final int DHTPid;

@@ -109,7 +109,7 @@ public class DHTNode implements EDProtocol {
         Node joiner      = msg.getSender();
         long joinerLogId = joiner.getID();
 
-        msg.getVisited().add(this.myLogicalId);
+        // 1. Record the visit using only the path
         msg.getPath().add(getMyNode());
 
         List<Node> candidates = new ArrayList<>();
@@ -122,7 +122,10 @@ public class DHTNode implements EDProtocol {
 
         for (Node n : candidates) {
             if (n.getID() == myLogicalId) continue;
-            if (msg.getVisited().contains(n.getID())) continue;
+
+            // 2. Prevent loops by checking if the candidate's ID is already in the path
+            if (pathContainsId(msg.getPath(), n.getID())) continue;
+
             long d = minRingDistance(n.getID(), joinerLogId);
             if (d < bestDist) {
                 bestDist = d;
@@ -131,7 +134,7 @@ public class DHTNode implements EDProtocol {
         }
 
         if (bestNode.getID() == this.myLogicalId) {
-           // System.out.println(this + ": answering JOIN from " + nodeLabel(joiner));
+            // System.out.println(this + ": answering JOIN from " + nodeLabel(joiner));
 
             // Track hop count for Benchmark
             Benchmark.joinHopCounts.put(joinerLogId, msg.getPath().size());
@@ -146,6 +149,14 @@ public class DHTNode implements EDProtocol {
             //System.out.println(this + ": forwarding JOIN from " + nodeLabel(joiner) + " to " + nodeLabel(bestNode));
             send(msg, bestNode);
         }
+    }
+
+    // 3. Helper method to replace the old .contains() check
+    private boolean pathContainsId(List<Node> path, long id) {
+        for (Node p : path) {
+            if (p.getID() == id) return true;
+        }
+        return false;
     }
 
     // --------------------------------------- JOIN_REPLY handler
@@ -179,7 +190,7 @@ public class DHTNode implements EDProtocol {
     // ------------------------------------------------ MESSAGE
 
     private void handleDHTNode(Message msg) {
-       // System.out.println(this + ": Received " + msg.getContent());
+        // System.out.println(this + ": Received " + msg.getContent());
         Node successor = getRingSuccessor();
         if (successor != null) {
             send(msg, successor);
@@ -194,7 +205,6 @@ public class DHTNode implements EDProtocol {
 
         for (Node n : leafset)       { if (n.getID() == candId) return; }
         for (Node n : furthestNodes) { if (n.getID() == candId) return; }
-
 
         if (furthestNodes.size() < maxFurthestNodes) {
             furthestNodes.add(candidate);
@@ -223,7 +233,9 @@ public class DHTNode implements EDProtocol {
     // -------------------------------------------------- leafset mechanics
 
     private List<Node> buildLeafsetFor(long targetId, List<Node> candidates) {
-        int half = leafsetSize / 2;
+        // ASYMMETRIC LOGIC APPLIED
+        int leftHalf = leafsetSize / 2;
+        int rightHalf = leafsetSize - leftHalf;
 
         List<Node> deduped = new ArrayList<>();
         for (Node n : candidates) {
@@ -243,18 +255,19 @@ public class DHTNode implements EDProtocol {
         for (Node n : deduped) {
             long cw = ringDistance(targetId, n.getID());
             boolean isSuccessor = cw <= maxLogicalId / 2;
-            if (isSuccessor && successors.size() < half) {
+            if (isSuccessor && successors.size() < rightHalf) {
                 successors.add(n);
-            } else if (!isSuccessor && predecessors.size() < half) {
+            } else if (!isSuccessor && predecessors.size() < leftHalf) {
                 predecessors.add(n);
             } else {
                 overflow.add(n);
+                //System.out.println(overflow.size());
             }
         }
 
         for (Node n : overflow) {
-            if (predecessors.size() < half)      predecessors.add(n);
-            else if (successors.size() < half)   successors.add(n);
+            if (predecessors.size() < leftHalf)      predecessors.add(n);
+            else if (successors.size() < rightHalf)   successors.add(n);
             else                                 break;
         }
 
@@ -267,7 +280,10 @@ public class DHTNode implements EDProtocol {
 
     private boolean shouldBeInLeafset(long candidateId) {
         if (candidateId == myLogicalId) return false;
-        int half = leafsetSize / 2;
+
+        // ASYMMETRIC LOGIC APPLIED
+        int leftHalf = leafsetSize / 2;
+        int rightHalf = leafsetSize - leftHalf;
 
         int leftCount = 0, rightCount = 0;
         for (Node n : leafset) {
@@ -279,8 +295,8 @@ public class DHTNode implements EDProtocol {
         long distRight = ringDistance(myLogicalId, candidateId);
         long distLeft  = ringDistance(candidateId, myLogicalId);
 
-        if (distRight <= maxLogicalId / 2 && rightCount < half) return true;
-        if (distLeft  <  maxLogicalId / 2 && leftCount  < half) return true;
+        if (distRight <= maxLogicalId / 2 && rightCount < rightHalf) return true;
+        if (distLeft  <  maxLogicalId / 2 && leftCount  < leftHalf) return true;
 
         if (distRight <= maxLogicalId / 2) {
             long furthest = leafset.stream()
@@ -306,7 +322,9 @@ public class DHTNode implements EDProtocol {
     }
 
     void trimLeafset() {
-        int half = leafsetSize / 2;
+        // ASYMMETRIC LOGIC APPLIED
+        int leftHalf = leafsetSize / 2;
+        int rightHalf = leafsetSize - leftHalf;
 
         List<Node> left  = new ArrayList<>();
         List<Node> right = new ArrayList<>();
@@ -320,8 +338,8 @@ public class DHTNode implements EDProtocol {
         right.sort(Comparator.comparingLong(n -> ringDistance(myLogicalId, n.getID())));
         left.sort( Comparator.comparingLong(n -> ringDistance(n.getID(), myLogicalId)));
 
-        if (right.size() > half) right = right.subList(0, half);
-        if (left.size()  > half) left  = left.subList(0,  half);
+        if (right.size() > rightHalf) right = right.subList(0, rightHalf);
+        if (left.size()  > leftHalf)  left  = left.subList(0,  leftHalf);
 
         leafset = new ArrayList<>();
         leafset.addAll(left);
@@ -329,7 +347,7 @@ public class DHTNode implements EDProtocol {
         sortLeafset();
     }
 
-    // -------------------------------------------------- ring arithmetic
+    // -------------------------------------------------- compute ring distance
 
     private long ringDistance(long from, long to) {
         return Math.floorMod(to - from, maxLogicalId);
@@ -351,7 +369,6 @@ public class DHTNode implements EDProtocol {
         return best;
     }
 
-    // Read from System property first (Benchmark override), then config file
     private static long readLong(String key, long def) {
         String v = System.getProperty(key);
         if (v != null) return Long.parseLong(v);

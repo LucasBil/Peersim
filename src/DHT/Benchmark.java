@@ -18,22 +18,24 @@ public class Benchmark implements peersim.core.Control {
     private static final int[] MAX_NEIGHBOURS  = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 16, 20, 24, 32, 48, 64, 128, 256};
     private static final int[] MAX_IDS         = {100, 250, 500, 1000, 2000, 3000, 5000, 7500, 10000, 15000, 20000, 50000, 100000, 250000};
 
+    // Total number of trials per config (takes average of each N trials for statistical stability)
     private static final int TRIALS_PER_CONFIG = 10;
 
+    // Total experiments, this has to match the experiments value in the config file
     public static final int TOTAL_EXPERIMENTS = (LEAFSET_SIZES.length + MAX_NEIGHBOURS.length + MAX_IDS.length) * TRIALS_PER_CONFIG;
 
     private static int currentExpIndex = 0;
 
-    // ------------------------------------------------------------------ averaging storage
+    // ------------------------------------------------------------------ accumulator for averages
 
     private static final List<ExperimentResult> results = new ArrayList<>();
-    private static Metrics accumulator = new Metrics(); // Sums values across trials
+    private static Metrics accumulator = new Metrics();
 
     // ------------------------------------------------------------------ hop tracking
 
     public static final Map<Long, Integer> joinHopCounts = new HashMap<>();
 
-    // ------------------------------------------------------------------ lifecycle
+    // ------------------------------------------------------------------ DHTPid
 
     private final int DHTPid;
 
